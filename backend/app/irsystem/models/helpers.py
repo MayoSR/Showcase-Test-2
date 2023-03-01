@@ -2,13 +2,7 @@
 from flask import jsonify
 import base64
 import json
-import operator
-import re
-from random import shuffle
-import numpy as np 
-
-with open('app/irsystem/controllers/TVTropesScraper/Main/tropes_description_dataset.json') as json_file:
-        tropeDescriptions = json.load(json_file)
+import numpy as np
 
 def http_json(result, bool):
 	result.update({ "success": bool })
@@ -53,68 +47,3 @@ def json_numpy_obj_hook(dct):
         data = base64.b64decode(dct['__ndarray__'])
         return np.frombuffer(data, dct['dtype']).reshape(dct['shape'])
     return dct
-
-def shorten_trope_desc(text):
-    paras = text.split("\n")
-    paras = [p for p in paras if len(p) >= 60]
-    return paras[:3]
-
-def cleanTropeName(title):
-    title = re.sub(r"([A-Z])([A-Z])", r"\1 \2", title)
-    title = re.sub(r"(\w)([A-Z])", r"\1 \2", title)
-    return title
-
-def trope_with_descriptions(tropes_of_title):
-    retval = []
-    for trope in tropes_of_title:
-        retval.append((cleanTropeName(trope), shorten_trope_desc(tropeDescriptions.get(trope, "No trope description found."))))
-    shuffle(retval)
-    return retval
-
-def topNTropes(tropes, n, title):
-    # trope_scores = sorted(trope_scores.items(), key=lambda x: x[1], reverse=True)
-
-    # topN = [trope for trope, score in trope_scores[:n]]
-    topN = trope_with_descriptions(tropes)
-    topN = [(trope, desc, trope+title.replace("'", "").replace('"', '')) for trope, desc in topN]
-
-    return topN
-
-def randomNInsp(d, n):
-    valid = [(item[0], item[0].replace("'", "%27"))
-             for item in d.items()
-             if item[1].get("rating", 0) >= 4.5]
-    shuffle(valid)
-    return valid[:n]
-
-
-def auto_paragraph(text):
-    """
-    Autoparagraphs the given text by separating the text into a series of paragraphs.
-    Returns a list of paragraphs.
-    :param text:
-    :return:
-    """
-
-    paras = []
-
-    lines = text.strip().split(". ")
-    para = []
-
-    while len(lines) > 0:
-        line = lines.pop(0)
-        if len(line.strip()) == 0: continue
-        para.append(line.replace('&nbsp;', ' '))
-        if len(para) > 1 and len(para) % 4 == 0:
-            para_text = ". ".join(para)
-            if not para_text.endswith("."): para_text += "."
-            paras.append(para_text)
-            para = []
-
-    if len(para) > 0:
-        final_para = ". ".join(para)
-        if not final_para.endswith("."): final_para += "."
-        paras.append(final_para)
-
-    return paras
-

@@ -1,179 +1,166 @@
 from . import *  
 from app.irsystem.models.helpers import *
-from app.irsystem.controllers.combined.recommender import *
+from app.irsystem.models.helpers import NumpyEncoder as NumpyEncoder
+from app import app as data_pool
+import json
+from app.irsystem.models.search import get_doc_rankings
+#import os
+#import psutil
+project_name = "Book Club"
+net_id = "Caroline Lui: cel243, Elisabeth Finkel: esf76, Janie Walter: jjw249, Kurt Huebner: krh57, Taixiang(Max) Zeng: tz376"
 
-# initialize internal vars
-with open('app/irsystem/controllers/DatasetInfo/book_dataset.json') as json_file:
-    booksJSON = json.load(json_file)
-with open('app/irsystem/controllers/DatasetInfo/movie_dataset.json') as json_file:
-    moviesJSON = json.load(json_file)
+# def memory_usage_psutil():
+# 	# return the memory usage in MB
+# 	process = psutil.Process(os.getpid())
+# 	print(process.memory_info().rss/float(2 ** 20))
 
+### helpers ###
+def _get_book_from_partial(book_str):
+	"""Given a partial string `book_str`, returns a list of elements 
+	("book_name by author", work_id, cover) where book_str is a substring
+	of book_name. The HTML template can then use the strings, work_ids, 
+	and cover image urls to display possible matches for the user to
+	select between.
+	"""
+	AUTOFILL_LIMIT = 20
+	works = data_pool.data['works']
+	relv_work_ids = []
+	relv_books = []
+	book_str = book_str.lower()
+	for work_id in range(len(works)): # first loop for initial matches
+		if len(relv_work_ids) >= AUTOFILL_LIMIT:
+			break
+		title = works[work_id]['title']
+		if book_str == title.lower()[:len(book_str)]:
+			relv_work_ids.append(work_id)
+	for work_id in range(len(works)): # second loop for substring matches
+		if len(relv_work_ids) >= AUTOFILL_LIMIT:
+			break
+		title = works[work_id]['title']
+		if book_str in title.lower() and work_id not in relv_work_ids:
+			relv_work_ids.append(work_id)
+	for work_id in relv_work_ids:
+		authors = works[work_id].get("author_names", ["(unknown)"])
+		authors = ", ".join(authors)
+		title = works[work_id]['title']
+		string = f'"{title}" by {authors}'
+		relv_books.append(
+			{"string": string, "work_id": work_id, "image": works[work_id].get("image")}
+		)
+	return relv_books
+
+def _clean(s):
+	""" To clean author names """
+	return s.lower().replace(".", "").strip()
+
+def _get_author_from_partial(auth_str):
+	"""Given a partial string `auth_str`, returns a list of elements 
+	(full_name, auth_id) where auth_id has name full_name and where
+	auth_str is a substring of full_name.
+	
+	The HTML template can then use the strings to display possible matches
+	for the user to select between.
+	"""
+	AUTOFILL_LIMIT = 20
+	authors = data_pool.data['authors']
+	relv_auths = []
+	relv_auth_ids = []
+	auth_str = _clean(auth_str)
+	for i, auth_name in enumerate(authors):
+		if len(relv_auth_ids) >= AUTOFILL_LIMIT:
+			break
+		if auth_str == _clean(auth_name)[:len(auth_str)]:
+			relv_auth_ids.append(i)
+	for i, auth_name in enumerate(authors):
+		if len(relv_auth_ids) >= AUTOFILL_LIMIT:
+			break
+		if auth_str in _clean(auth_name) and i not in relv_auth_ids:
+			relv_auth_ids.append(i)
+	for i in relv_auth_ids:
+		relv_auths.append({"name": authors[i], "author_id": i})
+	return relv_auths
+
+def rescore(inputs, idid):
+	"""Given some inputs in form [{work_id: stars}], rescale and
+	return rescored inpust in form [{`idid`: work_id, "score": score}]"""
+	rescale = {1: -1, 2: -0.5, 3: 0.5, 4: 1, 5: 2}
+	rescored = []
+	for i in inputs:
+		iid, stars = list(i.items())[0]
+		if type(iid)==str:
+			iid = int(iid)
+		if type(stars)==str:
+			stars = int(stars)
+		rescored.append({idid: iid, "score": rescale.get(stars, 0)})
+	return rescored
+
+def _get_reccs(work_ids, auth_ids, desired_genres, excluded_genres):
+	works = data_pool.data['works']
+	eligible = []
+	des, exc = set(desired_genres), set(excluded_genres)
+	for i, work in enumerate(works):
+		# # Logical AND and logical NOT:
+		# if set(work['genres']).issubset(req) and set(work['genres']).isdisjoint(exc):
+		# # Logical OR and logical NOT:
+		if (set(work['genres'])&des or len(desired_genres)==0) and set(work['genres']).isdisjoint(exc):
+			eligible.append(i)
+	results = get_doc_rankings(
+		work_ids,
+		eligible,
+		auth_ids,
+		data_pool.data['work_mat'],
+		data_pool.data['auth_mat'],
+		data_pool.data['works']
+	)
+	for r in results:
+		r['author'] = ", ".join(r['author'])
+	return results
+
+
+### ajax endpoints ###
+
+# GET request to search for matching book names
+@irsystem.route('/booknames', methods=['GET'])
+def get_book_from_partial():
+	partial = request.args.get('partial')
+	if not partial:
+		return json.dumps([])
+	return json.dumps(_get_book_from_partial(partial))
+
+
+# GET request to search for matching author names
+@irsystem.route('/authornames', methods=['GET'])
+def get_author_from_partial():
+	partial = request.args.get('partial')
+	if not partial:
+		return json.dumps([])
+	return json.dumps(_get_author_from_partial(partial))
+
+
+### html endpoints ###
+
+# Endpoint that receives preferences
+@irsystem.route('/result', methods=['POST'])
+def get_reccs():
+	req = json.loads(request.data)
+	works = req.get('works') # list of dicts: [{work_id: 234, stars: 2}, ...]
+	works_rescored = rescore(works, "work_id")
+	authors = req.get('authors')
+	authors_rescored = rescore(authors, "auth_id")
+	req_genres = req.get('required_genres', [])
+	ex_genres = req.get('excluded_genres', [])
+
+	results = _get_reccs(works_rescored, authors_rescored, req_genres, ex_genres)
+	return json.dumps(results)
+
+
+# Endpoint to redirect to result page
+@irsystem.route('/result', methods=['GET'])
+def get_result():
+	return render_template('result.html'), 200
+
+
+# Landing page
 @irsystem.route('/', methods=['GET'])
-def search():
-    # initialize export vars
-    if(not request.args.get('queryType')):
-        queryType = "movie"
-    else:
-        if "/" in request.args.get('queryType'):
-            queryType = request.args.get('queryType')[:-1]
-        else:
-            queryType = request.args.get('queryType')
-
-    if(queryType == "movie"):
-        outputType = "book"
-    else:
-        outputType = "movie"
-
-    q = None
-    if(request.args.get('query')):
-        q = request.args.get('query')
-        
-    rel_titles = []
-    for i in range(1, 6):
-        title = request.args.get('rocchio' + str(i), None)
-        if title is not None:
-            rel_titles.append(title)
-        
-    k = None
-    if(request.args.get('keyword')):
-        k = request.args.get('keyword')
-
-    popularity = request.args.get('popSlide')
-
-    if(not request.args.get('spec')):
-        spec = "False"
-    else:
-        spec = dict()
-
-    pastSearch = None
-    failedSearch = None
-    pastKeyword = None
-    pastPop = None
-    output = []
-
-    inspiration = None
-    
-    # books_lower_to_proper = {title.lower(): title for title in books}
-    # movies_lower_to_proper = {title.lower(): title for title in movies}
-    #
-    # for book in booksJSON.keys():
-    #     booksJSON[books_lower_to_proper.get(book.lower(), book)] = booksJSON.pop(book)
-    #
-    # for movie in moviesJSON.keys():
-    #     moviesJSON[movies_lower_to_proper.get(movie.lower(), movie)] = moviesJSON.pop(movie)
-
-    retrieval = None
-
-    # run query
-    if q and spec == "False":
-        pastSearch = q
-        if k:
-            pastKeyword = k
-        if popularity:
-            pastPop = popularity
-
-        direction = 'bm' if queryType == "book" else 'mb'
-
-
-        results = find_relevant(q, keyword=k, n_recs=5, n_tropes=5,
-                                                  direction=direction,
-                                                  popularity_weight=popularity,
-                                                  rocchio_titles = rel_titles)
-
-        if results:
-            recs, scores, top_tropes = results
-            title_to_tropes = {recs[i]: top_tropes[i] for i in range(len(recs))}
-            retrieval = ([(recs[i], scores[i]) for i in range(len(recs))], title_to_tropes)
-        else:
-            retrieval = False
-
-
-    # set export vars
-    validQueries = ""
-    if(queryType == "movie"):
-        validQueries = list(movies)
-    else:
-        validQueries = list(books)
-
-    if(not request.args.get('query')):
-        isHomeScreen = True
-    else:
-        isHomeScreen = False
-
-    if(queryType == "movie"):
-        inspiration = randomNInsp(moviesJSON, 3)
-    if(queryType == "book"):
-        inspiration = randomNInsp(booksJSON, 3)
-
-    if spec == "False":
-        if retrieval:
-            i = 0
-            for title, score in retrieval[0]:
-                output.append(dict())
-                if queryType == "movie":
-                    output[i]["title"] = title
-                    if "author" in booksJSON.get(title, ""):
-                        output[i]["author"] = booksJSON[title]["author"]
-                    output[i]["simScore"] = round(score, 3)
-                    output[i]["tropes"] = topNTropes(retrieval[1][title], 5, title)
-                    if "img" in booksJSON.get(title, ""):
-                        output[i]["img"] = booksJSON[title]["img"]
-
-                if queryType == "book":
-                    output[i]["title"] = title
-                    output[i]["simScore"] = round(score, 3)
-                    output[i]["tropes"] = topNTropes(retrieval[1][title], 5, title)
-                    if title in moviesJSON and "img" in moviesJSON[title]:
-                        output[i]["img"] = moviesJSON[title]["img"]
-
-                i += 1
-            if len(retrieval[0]) == 0:
-                failedSearch = "Sorry, insufficient data on '{}' for recommendations to be made.".format(q)
-        elif (q):
-            failedSearch = "Sorry, \'" + q + "\' is an invalid query."
-    else:
-        if(queryType == "movie"):
-            spec["title"] = q
-            if "author" in booksJSON[q]:
-                spec["author"] = booksJSON[q]["author"]
-            if "rating" in booksJSON[q]:
-                spec["rating"] = str(round(float(booksJSON[q]["rating"])*4)/4)
-            if "published" in booksJSON[q]:
-                spec["year"] = booksJSON[q]["published"]
-            if "summary" in booksJSON[q]:
-                spec["summary"] = auto_paragraph(booksJSON[q]["summary"])
-            if "reviews" in booksJSON[q]:
-                spec["reviews"] = booksJSON[q]["reviews"][::-1]
-            if "img" in booksJSON.get(q, ""):
-                spec["img"] = booksJSON[q]["img"]
-
-            spec["tropes"] = trope_with_descriptions(book_tropes_data[q])
-        else:
-            spec["title"] = q
-            if q in moviesJSON:
-                if "rating" in moviesJSON[q]:
-                    spec["rating"] = str(round(float(moviesJSON[q]["rating"])*4)/4)
-                if "published" in moviesJSON[q]:
-                    spec["year"] = moviesJSON[q]["published"]
-                if "summary" in moviesJSON[q]:
-                    spec["summary"] = auto_paragraph(moviesJSON[q]["summary"])
-                if "reviews" in moviesJSON[q]:
-                    spec["reviews"] = moviesJSON[q]["reviews"][::-1]
-                if "img" in moviesJSON[q]:
-                    spec["img"] = moviesJSON[q]["img"]
-            spec["tropes"] = trope_with_descriptions(movie_tropes_data[q])
-
-    # export
-    return render_template('search.html', 
-                            isHomeScreen = isHomeScreen, 
-                            inspiration = inspiration, 
-                            validQueries = validQueries, 
-                            queryType = queryType, 
-                            query = q, 
-                            pastSearch = pastSearch,
-                            failedSearch = failedSearch,
-                            pastKeyword = pastKeyword,
-                            pastPop = pastPop,
-                            outputType = outputType , 
-                            output = output, 
-                            spec = spec)
+def select():
+	return render_template('select.html'), 200
