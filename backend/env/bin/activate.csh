@@ -8,7 +8,7 @@ alias deactivate 'test $?_OLD_VIRTUAL_PATH != 0 && setenv PATH "$_OLD_VIRTUAL_PA
 # Unset irrelevant variables.
 deactivate nondestructive
 
-setenv VIRTUAL_ENV "/Users/mayankrao16/Desktop/4300-Showcase-01/backend/env"
+setenv VIRTUAL_ENV "/Users/mayankrao16/Desktop/proj-4300/cs4300sp2020-lgl47-pcm82-ml2359-tal82/env"
 
 set _OLD_VIRTUAL_PATH="$PATH"
 setenv PATH "$VIRTUAL_ENV/bin:$PATH"

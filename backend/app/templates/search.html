@@ -1,41 +1,117 @@
 <html>
 
 <head>
-    <link rel="stylesheet" href="/static/bootstrap.min.css">
-    <link rel="stylesheet" href="/static/main.css">
+    <link rel="stylesheet" href="/static/styles/bootstrap.min.css">
+    <link rel="stylesheet" href="/static/styles/main.css">
+    <link rel="stylesheet" href="/static/styles/home.css">
 </head>
 
 <body>
-    <div class="topcorner">
-        <p>Project Name: {{ name }}</p>
-        <p>Team: ({{ netid }})</p>
-    </div>
-    <form class="form-inline global-search">
-        <h1 style="font-size: 55px; font-family:Futura; color: #4285F4">
-            C
-            <span style="color: #EA4335; ">S</span>
-            <span style="color: #FBBC05; ">4</span>
-            3
-            <span style="color: #34A853; ">0</span>
-            <span style="color: #EA4335; ">0</span>
-        </h1>
+    <div class="layout">
+        <a href="/">
+            <img src="../static/images/logotype.svg" id="logotype" />
+        </a>
+        <div class="searchContainer">
+            <p class="largeText">Discover New Bread Recipes</p>
+            <form id=searchBar class="form-inline global-search">
+                <!-- <div class="form-group"> -->
 
-        <br><br>
+                {% if data and data != "EMPTY" %}
+                <p class="searchPrompt"><strong> Inspirations</strong></p>
+                <input id="input" type="text" name="search" class="form-control" value="{{query}}" autocomplete="off">
+                <p class="searchPrompt"><strong> Omissions</strong></p>
+                {% if omits and omits != "EMPTY" %}
+                <input id="input" type="text" name="omit" class="form-control" value="{{omits}}" autocomplete="off">
+                {% else %}
+                <input id="input" type="text" name="omit" class="form-control" placeholder="gluten, walnuts, sugar..."
+                    autocomplete="off">
+                {% endif %}
+                {% else %}
 
-        <div class="form-group">
-            <input id="input" type="text" name="search" class="form-control" placeholder="Your Input">
+                <p class="searchPrompt"><strong> Inspirations</strong></p>
+                <input id="input" type="text" name="search" class="form-control"
+                    placeholder="banana bread, multigrain sourdough, naan..." autocomplete="off">
+
+                <p class="searchPrompt"><strong> Omissions</strong></p>
+                <input id="input" type="text" name="omit" class="form-control" placeholder="gluten, walnuts, sugar..."
+                    autocomplete="off">
+                {% endif %}
+                <!-- <div id=enter_search onclick="burnToast();"> </div> -->
+                <!-- </div> -->
+
+            </form>
+            <div class="buttonContainer">
+                <button id="searchButton" form=searchBar type="submit">I'm Bready</button>
+            </div>
         </div>
-        <button type="submit" class="btn btn-info"> Go! </button>
-    </form>
-    <form class="form-inline global-search">
-        {% if data %}
-        <h1>{{output_message}}</h1>
-        {% for d in data %}
-        <br>
-        <p>{{d}}</p>
-        {% endfor %}
-        {% endif %}
-    </form>
+
+        <div class="resultsContainer">
+            {% if data and data != "EMPTY" %}
+            <div class="queryText">
+                <!-- You looked for: {{query}} <br>
+                {% if omits and omits != EMPTY %}
+                You've omitted: {{omits}} <br>
+                {% endif %} -->
+                {% if updated_query and updated_query != EMPTY %}
+                Up/Downvote Recipes to Improve Your Results!
+                <!-- Better query: {{updated_query}} -->
+                {% endif %}
+            </div>
+
+            <form id=results class="recipeForm">
+                <div id=output_message>{{output_message}}</div>
+                {% for i in range(0, dlen) %}
+                <br>
+                <div>
+
+                    <div class=recipeContainer>
+                        <a class="recipeLink" href={{data[i][1]}}>
+                            <div class="recipeImage"
+                                style="background-image: url({{data_image_urls[i]}}); background-size: cover;">
+                                {% if data[i][3] == '0' %}
+                                <input class="likeClass no_vote" id=likeButton type="submit" form=searchBar
+                                    name="upvote" value={{data[i][2]}} />
+                                <input class=dislikeClass id=dislikeButton type="submit" form=searchBar name="downvote"
+                                    value={{data[i][2]}} />
+                                {% endif %}
+
+
+                                {% if data[i][3] == '1' %}
+                                <input class="likeClass upvote" id=likeButton type="submit" form=searchBar name="upvote"
+                                    value={{data[i][2]}} />
+                                <input class=dislikeClass id=dislikeButton type="submit" form=searchBar name="downvote"
+                                    value={{data[i][2]}} />
+                                {% endif %}
+
+
+                                {% if data[i][3] == '-1' %}
+                                <input class="likeClass" id=likeButton type="submit" form=searchBar name="upvote"
+                                    value={{data[i][2]}} />
+                                <input class="dislikeClass downvote" id=dislikeButton type="submit" form=searchBar
+                                    name="downvote" value={{data[i][2]}} />
+                                {% endif %}
+                            </div>
+                            <div id=recipeName>{{data[i][0]}}</div>
+                        </a>
+                        <!-- <a class=recipe_link href={{data[i][1]}}>{{data[i][0]}}</a> -->
+                    </div>
+                </div>
+                {% endfor %}
+            </form>
+            {% else %}
+            {% if data == "EMPTY" %}
+            <div class="queryText">
+                No Results Found for {{query}}
+            </div>
+            {% endif %}
+
+            {% endif %}
+        </div>
+    </div>
+    <div class="footer">
+        🍞 Baked by Lindsey Luo, Michelle Loven, Peter Munn, and Thomas Lu 🥖
+    </div>
+    <script src="/static/scripts/home.js"></script>
 </body>
 
 </html>

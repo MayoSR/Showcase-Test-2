@@ -38,7 +38,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV="/Users/mayankrao16/Desktop/4300-Showcase-01/backend/env"
+VIRTUAL_ENV="/Users/mayankrao16/Desktop/proj-4300/cs4300sp2020-lgl47-pcm82-ml2359-tal82/env"
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"
