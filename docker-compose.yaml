@@ -1,20 +1,5 @@
 version: '3.8'
 services:
-    frontend_app:
-        container_name: ${TEAM_NAME}_frontend_app
-        ports:
-                - ${FRONTEND_EXTERNAL_PORT}:${FRONTEND_INTERNAL_PORT}
-        expose:
-                - ${FRONTEND_EXTERNAL_PORT}
-        restart: always
-        build:
-                context: ./frontend
-                dockerfile: Dockerfile
-        networks:
-                flask_network:
-                        aliases:
-                                - flask-network
-        command: nginx -g 'daemon off;'
     backend_flask_app:
         container_name: ${TEAM_NAME}_backend_flask_app
         ports:
@@ -40,10 +25,6 @@ services:
         image: mariadb:10.5.8
         restart: always
         container_name: ${TEAM_NAME}_flask_db
-        ports:
-                - ${MYSQL_EXTERNAL_PORT}:${MYSQL_INTERNAL_PORT}
-        expose:
-                - ${MYSQL_EXTERNAL_PORT}
         environment:
                 - MYSQL_USER=${MYSQL_USER}
                 - MYSQL_PASSWORD=${MYSQL_PASSWORD}
